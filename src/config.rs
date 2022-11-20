@@ -3,7 +3,7 @@ use std::io;
 
 use tracing_subscriber::filter::{Directive, EnvFilter, LevelFilter};
 
-use crate::{EventFormatter, FieldFormatter};
+use crate::{EventFormatter, FieldFormatter, TimeFormat};
 
 /// The destination for where serif will write logs
 #[derive(Clone, Copy)]
@@ -63,6 +63,7 @@ impl ColorMode {
 
 /// Builder style configuration for the `serif` tracing-subscriber implementation
 pub struct Config {
+    event_formatter: EventFormatter,
     output: Output,
     color: ColorMode,
     default_directive: Directive,
@@ -75,9 +76,12 @@ impl Default for Config {
 }
 
 impl Config {
+    // main builder methods
+
     /// Create a new `Config` with the default configuration
     pub fn new() -> Self {
         Self {
+            event_formatter: Default::default(),
             output: Default::default(),
             color: Default::default(),
             default_directive: LevelFilter::INFO.into(),
@@ -128,13 +132,33 @@ impl Config {
         self.with_default(level)
     }
 
+    // EventFormatter builder methods
+
+    /// Set the timestamp format for this Config.
+    pub fn with_timestamp(self, time_format: TimeFormat) -> Self {
+        Self { event_formatter: self.event_formatter.with_timestamp(time_format), ..self }
+    }
+
+    /// Set whether or not an event's target is displayed.
+    pub fn with_target(self, display_target: bool) -> Self {
+        Self { event_formatter: self.event_formatter.with_target(display_target), ..self }
+    }
+
+    /// Set whether or not an event's span scope is displayed.
+    pub fn with_scope(self, display_scope: bool) -> Self {
+        Self { event_formatter: self.event_formatter.with_scope(display_scope), ..self }
+    }
+
     /// Finalize this Config and register it as the global default tracing subscriber.
     ///
     /// # Panics
     ///
     /// Panics if the `RUST_LOG` environment variable is invalid (see [`make_env_filter`]) or if
     /// another global subscriber is installed (see [`SubscriberBuilder::init`])
-    pub fn init(&self) {
+    ///
+    /// [`make_env_filter`]: Config::make_env_filter
+    /// [`SubscriberBuilder::init`]: tracing_subscriber::fmt::SubscriberBuilder::init
+    pub fn init(self) {
         // FmtSubscriber (and SubscriberBuilder) are generic over the MakeWriter type given to
         // with_writer, so split up the logic to avoid having to wrap stdout/stderr in an extra
         // Box. Due to unnecessary implementation restrictions, with_ansi must be set before
@@ -143,7 +167,7 @@ impl Config {
             .with_env_filter(self.make_env_filter())
             .with_ansi(self.color.enable_for(self.output))
             // register custom formatter types
-            .event_format(EventFormatter::new())
+            .event_format(self.event_formatter)
             .fmt_fields(FieldFormatter::new());
 
         match self.output {

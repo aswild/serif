@@ -83,8 +83,14 @@ mod shaving {
 
 fn main() {
     serif::Config::new()
+        // set trace level by default to show all the features
         .with_default(tracing::Level::TRACE)
-        .with_output(serif::Output::Stderr)
+        // these options are the defaults, but are included here for completeness
+        .with_output(serif::Output::Stdout)
+        .with_color(serif::ColorMode::Auto)
+        .with_timestamp(serif::TimeFormat::Local)
+        .with_target(true)
+        .with_scope(true)
         .init();
 
     let number_of_yaks = 3;

@@ -1,5 +1,6 @@
 use std::fmt;
 
+use chrono::{DateTime, Local, Utc};
 use nu_ansi_term::{Color, Style};
 use tracing_core::{field::Field, Event, Level, Subscriber};
 use tracing_subscriber::{
@@ -13,11 +14,12 @@ pub use tracing;
 
 #[cfg(feature = "re-exports")]
 pub mod macros {
+    #[doc(no_inline)]
     pub use tracing::{debug, error, info, span, trace, warn};
 }
 
 mod config;
-pub use config::{Output, ColorMode, Config};
+pub use config::{ColorMode, Config, Output};
 
 /// Extension trait for writing ANSI-styled messages
 trait WriterExt: fmt::Write {
@@ -156,16 +158,78 @@ impl<'a> VisitFmt for FieldVisitor<'a> {
     }
 }
 
+/// The style of timestamp to be formatted for tracing events
+#[derive(Debug, Clone)]
+pub enum TimeFormat {
+    /// Don't display a timestamp
+    None,
+    /// Display a RFC 3339 timestamp in the local timezone. This is the default
+    Local,
+    /// Display a RFC 3339 timestamp in UTC
+    Utc,
+    /// Display a timestamp in the local timezone using a custom format.
+    ///
+    /// See [`chrono::format::strftime`] for the syntax
+    CustomLocal(String),
+    /// Display a timestamp in UTC using a custom format.
+    ///
+    /// See [`chrono::format::strftime`] for the syntax
+    CustomUtc(String),
+}
+
+impl Default for TimeFormat {
+    fn default() -> Self {
+        Self::Local
+    }
+}
+
+impl TimeFormat {
+    fn is_none(&self) -> bool {
+        matches!(self, TimeFormat::None)
+    }
+}
+
+/// Helper to format a timestamp easily using Display
+struct TimeDisplay<'a>(&'a TimeFormat, DateTime<Utc>);
+
+impl fmt::Display for TimeDisplay<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.0 {
+            TimeFormat::None => Ok(()),
+            TimeFormat::Local => DateTime::<Local>::from(self.1).format("%FT%T%z").fmt(f),
+            TimeFormat::Utc => self.1.format("%FT%TZ").fmt(f),
+            TimeFormat::CustomLocal(fmt) => DateTime::<Local>::from(self.1).format(fmt).fmt(f),
+            TimeFormat::CustomUtc(fmt) => self.1.format(fmt).fmt(f),
+        }
+    }
+}
+
 /// `serif`'s main tracing event formatter.
 pub struct EventFormatter {
-    // we'll add some options in the future
-    _private: (),
+    time_format: TimeFormat,
+    display_target: bool,
+    display_scope: bool,
 }
 
 impl EventFormatter {
     /// Create a new `EventFormatter` with the default options.
     pub fn new() -> Self {
-        Self { _private: () }
+        Self { time_format: Default::default(), display_target: true, display_scope: true }
+    }
+
+    /// Set the timestamp format for this event formatter
+    pub fn with_timestamp(self, time_format: TimeFormat) -> Self {
+        Self { time_format, ..self }
+    }
+
+    /// Set whether or not an event's target is displayed.
+    pub fn with_target(self, display_target: bool) -> Self {
+        Self { display_target, ..self }
+    }
+
+    /// Set whether or not an event's span scope is displayed.
+    pub fn with_scope(self, display_scope: bool) -> Self {
+        Self { display_scope, ..self }
     }
 }
 
@@ -189,7 +253,9 @@ where
         let dimmed = Style::default().dimmed();
 
         // display the timestamp
-        write_style!(writer, dimmed, "[{}] ", chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%z"))?;
+        if !self.time_format.is_none() {
+            write_style!(writer, dimmed, "[{}] ", TimeDisplay(&self.time_format, Utc::now()))?;
+        }
 
         // display the level
         let level = *event.metadata().level();
@@ -203,7 +269,8 @@ where
         write_style!(writer, level_style, "{level:>5} ")?;
 
         // display the span's scope
-        if let Some(scope) = ctx.event_scope() {
+        let maybe_scope = if self.display_scope { ctx.event_scope() } else { None };
+        if let Some(scope) = maybe_scope {
             let mut seen = false;
 
             for span in scope.from_root() {
@@ -223,8 +290,10 @@ where
         }
 
         // display the target (which is the rust module path by default, but can be overridden)
-        write_style!(writer, Color::Blue.dimmed(), "{}", event.metadata().target())?;
-        writer.write_str(": ")?;
+        if self.display_target {
+            write_style!(writer, Color::Blue.dimmed(), "{}", event.metadata().target())?;
+            writer.write_str(": ")?;
+        }
 
         // display the event message and fields
         ctx.format_fields(writer.by_ref(), event)?;
