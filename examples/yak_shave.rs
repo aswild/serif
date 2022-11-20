@@ -82,7 +82,10 @@ mod shaving {
 }
 
 fn main() {
-    serif::tracing_init(Some(2));
+    serif::Config::new()
+        .with_default(tracing::Level::TRACE)
+        .with_output(serif::Output::Stderr)
+        .init();
 
     let number_of_yaks = 3;
     // this creates a new event, outside of any spans.

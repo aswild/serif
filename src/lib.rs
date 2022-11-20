@@ -6,7 +6,6 @@ use tracing_subscriber::{
     field::{MakeVisitor, Visit, VisitFmt, VisitOutput},
     fmt::{format::Writer, FmtContext, FormatEvent, FormatFields, FormattedFields},
     registry::LookupSpan,
-    EnvFilter,
 };
 
 #[cfg(feature = "re-exports")]
@@ -16,6 +15,9 @@ pub use tracing;
 pub mod macros {
     pub use tracing::{debug, error, info, span, trace, warn};
 }
+
+mod config;
+pub use config::{Output, ColorMode, Config};
 
 /// Extension trait for writing ANSI-styled messages
 trait WriterExt: fmt::Write {
@@ -66,14 +68,12 @@ pub struct FieldFormatter {
 }
 
 impl FieldFormatter {
-    #[inline]
     pub fn new() -> Self {
         Self { _private: () }
     }
 }
 
 impl Default for FieldFormatter {
-    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -164,14 +164,12 @@ pub struct EventFormatter {
 
 impl EventFormatter {
     /// Create a new `EventFormatter` with the default options.
-    #[inline]
     pub fn new() -> Self {
         Self { _private: () }
     }
 }
 
 impl Default for EventFormatter {
-    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -224,7 +222,7 @@ where
             }
         }
 
-        // display the target
+        // display the target (which is the rust module path by default, but can be overridden)
         write_style!(writer, Color::Blue.dimmed(), "{}", event.metadata().target())?;
         writer.write_str(": ")?;
 
@@ -232,51 +230,4 @@ where
         ctx.format_fields(writer.by_ref(), event)?;
         writeln!(writer)
     }
-}
-
-pub fn tracing_init(verbosity: Option<i32>) {
-    let default_filter_str = match verbosity.map(|val| val.clamp(-3, 2)) {
-        Some(-3) => "off",
-        Some(-2) => "error",
-        Some(-1) => "warn",
-        Some(0) | None => "info",
-        Some(1) => "debug",
-        Some(2) => "trace",
-        Some(_) => unreachable!(),
-    };
-
-    let env = std::env::var("RUST_LOG"); // owns a String, keep it live on the stack
-    let filter_string = match env {
-        Ok(ref val) => {
-            if val.is_empty() {
-                default_filter_str
-            } else {
-                val
-            }
-        }
-        Err(std::env::VarError::NotPresent) => default_filter_str,
-        Err(std::env::VarError::NotUnicode(_)) => {
-            panic!("RUST_LOG environment variable isn't valid unicode")
-        }
-    };
-
-    debug_assert!(!filter_string.is_empty());
-    let filter = match EnvFilter::try_new(filter_string) {
-        Ok(filter) => filter,
-        Err(err) => panic!("Invalid RUST_LOG filter string '{filter_string}': {err}"),
-    };
-
-    tracing_subscriber::fmt()
-        // use our event filter from above
-        .with_env_filter(filter)
-        // due to unnecessary implementation restrictions, with_ansi must be set before registering
-        // the custom event formatter. See https://github.com/tokio-rs/tracing/issues/1867
-        .with_ansi(true)
-        // register custom formatter types
-        .event_format(EventFormatter::new())
-        .fmt_fields(FieldFormatter::new())
-        // write to stderr instead of stdout
-        .with_writer(std::io::stderr)
-        // register as the global default subscriber
-        .init();
 }

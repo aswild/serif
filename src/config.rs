@@ -1,0 +1,186 @@
+use std::env::{self, VarError};
+use std::io;
+
+use tracing_subscriber::filter::{Directive, EnvFilter, LevelFilter};
+
+use crate::{EventFormatter, FieldFormatter};
+
+/// The destination for where serif will write logs
+#[derive(Clone, Copy)]
+pub enum Output {
+    /// Log to standard output
+    Stdout,
+    /// Log to standard error
+    Stderr,
+}
+
+impl Default for Output {
+    /// The default output destination is stdout
+    fn default() -> Self {
+        Self::Stdout
+    }
+}
+
+/// When to apply ANSI colors to output
+#[derive(Clone, Copy)]
+pub enum ColorMode {
+    /// Apply colors if the output (stdout or stderr) is a terminal.
+    ///
+    /// Additionally, if the `NO_COLOR` environment variable is set to any non-empty string, ANSI
+    /// coloring will be disabled.
+    Auto,
+    /// Always apply ANSI colors
+    Always,
+    /// Never apply ANSI colors
+    Never,
+}
+
+impl Default for ColorMode {
+    /// The default color mode is `Auto`, i.e. apply ANSI styling if the output file is a TTY
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+impl ColorMode {
+    /// Whether to enable ANSI colors for a given Output destination
+    fn enable_for(&self, output: Output) -> bool {
+        match self {
+            Self::Auto => {
+                if env::var_os("NO_COLOR").map(|s| !s.is_empty()).unwrap_or(false) {
+                    return false;
+                }
+                atty::is(match output {
+                    Output::Stdout => atty::Stream::Stdout,
+                    Output::Stderr => atty::Stream::Stderr,
+                })
+            }
+            Self::Always => true,
+            Self::Never => false,
+        }
+    }
+}
+
+/// Builder style configuration for the `serif` tracing-subscriber implementation
+pub struct Config {
+    output: Output,
+    color: ColorMode,
+    default_directive: Directive,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Config {
+    /// Create a new `Config` with the default configuration
+    pub fn new() -> Self {
+        Self {
+            output: Default::default(),
+            color: Default::default(),
+            default_directive: LevelFilter::INFO.into(),
+        }
+    }
+
+    /// Change the output destination to stdout or stderr. The default is stderr.
+    pub fn with_output(self, output: Output) -> Self {
+        Self { output, ..self }
+    }
+
+    /// Enable or disable ANSI coloring. Default is [`ColorMode::Auto`]
+    pub fn with_color(self, color: ColorMode) -> Self {
+        Self { color, ..self }
+    }
+
+    /// Set the default log directive.
+    ///
+    /// Usually this will be used with a [`LevelFilter`] to set a default log level, as
+    /// [`LevelFilter`] implements `Into<Directive>`.
+    pub fn with_default(self, default: impl Into<Directive>) -> Self {
+        Self { default_directive: default.into(), ..self }
+    }
+
+    /// Set the default log level using a numberic "verbosity" value.
+    ///
+    /// Applications can use this to easily turn the count of command line flags (e.g. `--verbose`
+    /// or `--quiet`) into a default log level. This method does the same thing as
+    /// [`Config::with_default`] and it makes no sense to combine them.
+    ///
+    /// The mapping of verbosity levels to log levels is:
+    ///   * `-3` or less: off (no logs enabled)
+    ///   * `-2`: error
+    ///   * `-1`: warning
+    ///   * `0`: info
+    ///   * `1`: debug
+    ///   * `2` or greater: trace
+    pub fn with_verbosity(self, verbosity: i32) -> Self {
+        let level = match verbosity.clamp(-3, 2) {
+            -3 => LevelFilter::OFF,
+            -2 => LevelFilter::ERROR,
+            -1 => LevelFilter::WARN,
+            0 => LevelFilter::INFO,
+            1 => LevelFilter::DEBUG,
+            2 => LevelFilter::TRACE,
+            _ => unreachable!(),
+        };
+        self.with_default(level)
+    }
+
+    /// Finalize this Config and register it as the global default tracing subscriber.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `RUST_LOG` environment variable is invalid (see [`make_env_filter`]) or if
+    /// another global subscriber is installed (see [`SubscriberBuilder::init`])
+    pub fn init(&self) {
+        // FmtSubscriber (and SubscriberBuilder) are generic over the MakeWriter type given to
+        // with_writer, so split up the logic to avoid having to wrap stdout/stderr in an extra
+        // Box. Due to unnecessary implementation restrictions, with_ansi must be set before
+        // setting the custom event formatter. See https://github.com/tokio-rs/tracing/issues/1867
+        let builder = tracing_subscriber::fmt()
+            .with_env_filter(self.make_env_filter())
+            .with_ansi(self.color.enable_for(self.output))
+            // register custom formatter types
+            .event_format(EventFormatter::new())
+            .fmt_fields(FieldFormatter::new());
+
+        match self.output {
+            Output::Stdout => builder.with_writer(io::stdout).init(),
+            Output::Stderr => builder.with_writer(io::stderr).init(),
+        }
+    }
+
+    /// Create an [`EnvFilter`] from this Config.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `RUST_LOG` environment variable contains invalid unicode, or if it contains
+    /// invalid EnvFilter directives.
+    pub fn make_env_filter(&self) -> EnvFilter {
+        // EnvFilter's handling of defaults and fallbacks is wonky and confusing (there's a number
+        // of github issues so hopefully it's improved eventually). So we sidestep all that mess
+        // and handle the logic ourselves. If RUST_LOG is unset or empty, then use our fallback. If
+        // RUST_LOG is set, use it with no default/fallback, and use the try_new method to cause
+        // errors on any invalid directives.
+        let env_str = match env::var("RUST_LOG") {
+            Ok(val) if val.is_empty() => None,
+            Ok(val) => Some(val),
+            Err(VarError::NotPresent) => None,
+            Err(VarError::NotUnicode(val)) => {
+                panic!("The RUST_LOG environment variable isn't valid unicode: {val:?}")
+            }
+        };
+
+        match &env_str {
+            Some(filter_str) => {
+                debug_assert!(!filter_str.is_empty());
+                EnvFilter::try_new(filter_str).unwrap_or_else(|err| {
+                    panic!("Invalid RUST_LOG filter string '{filter_str}': {err}")
+                })
+            }
+            None => EnvFilter::default().add_directive(self.default_directive.clone()),
+        }
+    }
+}
