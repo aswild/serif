@@ -4,13 +4,30 @@ description = "An opinionated tracing-subscriber configuration with a focus on r
 authors = ["Allen Wild <allenwild93@gmail.com>"]
 version = "0.1.0"
 edition = "2021"
+# Don't treate the examples directory as examples for this package (it's exclusively a workspace
+# member crate). Without this, "cargo test" at the workspace root breaks.
+autoexamples = false
+
+[workspace]
+# The example is a separate package/crate rather than being an "example" of the serif library
+# itself so that this Cargo.toml isn't polluted with unnecessary optional dependencies.
+# Run the example using "cargo run -p serif-examples"
+members = [".", "examples"]
 
 [dependencies]
-chrono = { version = "0.4.2", default-features = false, features = ["clock"] }
+# chrono 0.4.20 is when soundness issues with localtime_r were fixed, and local timestamps are the
+# whole reason to use chrono rather than time.
+chrono = { version = "0.4.20", default-features = false, features = ["clock"] }
+# same library that tracing-subscriber uses, and it's more ergonomic than termcolor in this case
 nu-ansi-term = "0.46"
+# just used for convenient re-exports
+tracing = { version = "0.1", optional = true, default-features = false }
 tracing-core = "0.1"
-tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
-# needed only for binary/example
-thiserror = "1"
-tracing = "0.1"
+[features]
+default = ["re-exports"]
+# re-export tracing as serif::tracing, and tracing's event macros as serif::tracing_macros::*
+# This is a convenience so that consumers don't need to separately include tracing in their
+# Cargo.toml (unless additional tracing crate features are desired)
+re-exports = ["dep:tracing"]

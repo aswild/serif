@@ -1,6 +1,10 @@
+//! The yak shaving example from tracing, adapted for use with serif
+
 use std::error::Error;
+
+use serif::macros::*;
+use serif::tracing::{self, Level};
 use thiserror::Error;
-use tracing::{debug, error, info, span, trace, warn, Level};
 
 // the `#[tracing::instrument]` attribute creates and enters a span
 // every time the instrumented function is called. The span is named after
@@ -56,7 +60,6 @@ pub fn shave_all(yaks: usize) -> usize {
 }
 
 // Error types
-// Usually you would pick one error handling library to use, but they can be mixed freely
 #[derive(Debug, Error)]
 enum OutOfSpaceError {
     #[error("out of cash")]
@@ -65,12 +68,23 @@ enum OutOfSpaceError {
 
 #[derive(Debug, Error)]
 enum MissingYakError {
-    #[error("out of space")]
+    #[error("out of space: {0}")]
     OutOfSpace(#[from] OutOfSpaceError),
 }
 
 #[derive(Debug, Error)]
 enum YakError {
-    #[error("missing yak")]
+    #[error("missing yak: {0}")]
     MissingYak(#[from] MissingYakError),
+}
+
+fn main() {
+    serif::tracing_init(Some(2));
+
+    let number_of_yaks = 3;
+    // this creates a new event, outside of any spans.
+    tracing::info!(number_of_yaks, "preparing to shave yaks");
+
+    let number_shaved = shave_all(number_of_yaks);
+    tracing::info!(all_yaks_shaved = number_shaved == number_of_yaks, "yak shaving completed.");
 }

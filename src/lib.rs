@@ -1,20 +1,7 @@
-mod yak_shave;
-
-fn main() {
-    tracing_init(Some(2));
-
-    let number_of_yaks = 3;
-    // this creates a new event, outside of any spans.
-    tracing::info!(number_of_yaks, "preparing to shave yaks");
-
-    let number_shaved = yak_shave::shave_all(number_of_yaks);
-    tracing::info!(all_yaks_shaved = number_shaved == number_of_yaks, "yak shaving completed.");
-}
-
 use std::fmt;
 
 use nu_ansi_term::{Color, Style};
-use tracing::{field::Field, Event, Level, Subscriber};
+use tracing_core::{field::Field, Event, Level, Subscriber};
 use tracing_subscriber::{
     field::{MakeVisitor, Visit, VisitFmt, VisitOutput},
     fmt::{format::Writer, FmtContext, FormatEvent, FormatFields, FormattedFields},
@@ -22,36 +9,75 @@ use tracing_subscriber::{
     EnvFilter,
 };
 
-trait WriterExt: fmt::Write {
-    fn style(&self, style: impl Into<Style>) -> Style;
+#[cfg(feature = "re-exports")]
+pub use tracing;
 
+#[cfg(feature = "re-exports")]
+pub mod macros {
+    pub use tracing::{debug, error, info, span, trace, warn};
+}
+
+/// Extension trait for writing ANSI-styled messages
+trait WriterExt: fmt::Write {
+    /// Whether or not ANSI formatting should be enabled.
+    ///
+    /// When this method returns `false`, calls to [`write_style`] will ignore the given style and
+    /// write plain output instead.
+    fn enable_ansi(&self) -> bool;
+
+    /// Write any `Display`-able type to this Writer, using the given `Style` if and only if
+    /// `enable_ansi` returns `true`
     fn write_style<S, T>(&mut self, style: S, value: T) -> fmt::Result
     where
         S: Into<Style>,
         T: fmt::Display,
     {
-        let style = self.style(style);
-        write!(self, "{}{}{}", style.prefix(), value, style.suffix())
-    }
-}
-
-impl WriterExt for Writer<'_> {
-    fn style(&self, style: impl Into<Style>) -> Style {
-        if self.has_ansi_escapes() {
-            style.into()
+        if self.enable_ansi() {
+            let style = style.into();
+            write!(self, "{}{}{}", style.prefix(), value, style.suffix())
         } else {
-            Style::default()
+            write!(self, "{}", value)
         }
     }
 }
 
+impl WriterExt for Writer<'_> {
+    #[inline]
+    fn enable_ansi(&self) -> bool {
+        self.has_ansi_escapes()
+    }
+}
+
+/// Macro to call [`WriterExt::write_style`] with arbitrary format arguments
 macro_rules! write_style {
     ($writer:expr, $style:expr, $($arg:tt)*) => {
         $writer.write_style($style, format_args!($($arg)*))
     };
 }
 
-struct FieldFormatter;
+/// `serif`'s formatter for event and span metadata fields.
+///
+/// `FieldFormatter` is intended to be used with [`SubscriberBuilder::fmt_fields`]
+///
+/// [`SubscriberBuilder::fmt_fields`]: tracing_subscriber::fmt::SubscriberBuilder::fmt_fields
+pub struct FieldFormatter {
+    // reserve the right to add options in the future
+    _private: (),
+}
+
+impl FieldFormatter {
+    #[inline]
+    pub fn new() -> Self {
+        Self { _private: () }
+    }
+}
+
+impl Default for FieldFormatter {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<'a> MakeVisitor<Writer<'a>> for FieldFormatter {
     type Visitor = FieldVisitor<'a>;
@@ -61,6 +87,7 @@ impl<'a> MakeVisitor<Writer<'a>> for FieldFormatter {
     }
 }
 
+/// A type of field that's been visited. Implementation detail of [`FieldVisitor`]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FieldType {
     None,
@@ -68,17 +95,24 @@ enum FieldType {
     Other,
 }
 
-struct FieldVisitor<'a> {
+/// The visitor type used by [`FieldFormatter`]
+///
+/// If a field is named `"message"`, then it's printed in the default text style. All other fields
+/// are formatted in square brackets and dimmed text style like `[name=value]`. Padding is added on
+/// either side of the `"message"` field, but not around other fields.
+pub struct FieldVisitor<'a> {
     writer: Writer<'a>,
     result: fmt::Result,
     last: FieldType,
 }
 
 impl<'a> FieldVisitor<'a> {
-    fn new(writer: Writer<'a>) -> Self {
+    /// Create a new `FieldVisitor` with the given writer.
+    pub fn new(writer: Writer<'a>) -> Self {
         Self { writer, result: Ok(()), last: FieldType::None }
     }
 
+    /// Implementation of `Visit::record_debug` but returning a Result for easier error handling.
     fn inner_record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) -> fmt::Result {
         let name = field.name();
         if name == "message" {
@@ -122,7 +156,26 @@ impl<'a> VisitFmt for FieldVisitor<'a> {
     }
 }
 
-struct EventFormatter;
+/// `serif`'s main tracing event formatter.
+pub struct EventFormatter {
+    // we'll add some options in the future
+    _private: (),
+}
+
+impl EventFormatter {
+    /// Create a new `EventFormatter` with the default options.
+    #[inline]
+    pub fn new() -> Self {
+        Self { _private: () }
+    }
+}
+
+impl Default for EventFormatter {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 impl<S, N> FormatEvent<S, N> for EventFormatter
 where
@@ -156,7 +209,6 @@ where
             let mut seen = false;
 
             for span in scope.from_root() {
-                //write_style!(writer, Color::Cyan.dimmed(), "{}", span.metadata().name())?;
                 writer.write_style(Color::Cyan.dimmed(), span.metadata().name())?;
                 seen = true;
 
@@ -182,7 +234,7 @@ where
     }
 }
 
-fn tracing_init(verbosity: Option<i32>) {
+pub fn tracing_init(verbosity: Option<i32>) {
     let default_filter_str = match verbosity.map(|val| val.clamp(-3, 2)) {
         Some(-3) => "off",
         Some(-2) => "error",
@@ -221,24 +273,10 @@ fn tracing_init(verbosity: Option<i32>) {
         // the custom event formatter. See https://github.com/tokio-rs/tracing/issues/1867
         .with_ansi(true)
         // register custom formatter types
-        .event_format(EventFormatter)
-        .fmt_fields(FieldFormatter)
+        .event_format(EventFormatter::new())
+        .fmt_fields(FieldFormatter::new())
         // write to stderr instead of stdout
         .with_writer(std::io::stderr)
         // register as the global default subscriber
         .init();
 }
-
-/*
-/// tracing-subscriber uses the `time` crate, which doesn't have a safe way to get the local time.
-/// `chrono`, however, has implemented safe local time support, so use that.
-struct LocalTimer;
-
-impl FormatTime for LocalTimer {
-    fn format_time(&self, w: &mut Writer) -> fmt::Result {
-        //let now = chrono::Local::now();
-        //write!(w, "[{}]", now.format("%Y-%m-%d %H:%M:%S%z"))
-        write!(w, "[{}]", chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%z"))
-    }
-}
-*/

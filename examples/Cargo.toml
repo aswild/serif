@@ -1,0 +1,14 @@
+[package]
+name = "serif-examples"
+version = "0.1.0"
+edition = "2021"
+default-run = "yak-shave"
+
+[[bin]]
+name = "yak-shave"
+path = "yak_shave.rs"
+
+[dependencies]
+serif = { path = ".." }
+thiserror = "1"
+tracing = { version = "0.1", features = ["attributes"] }
