@@ -1,0 +1,6 @@
+# max line length. 100 is the default
+max_width = 100
+
+# Allow the full line length before splitting up call chains, struct initializers, etc.
+# In rustfmt 2.0, change this to "width_heuristics"
+use_small_heuristics = "max"

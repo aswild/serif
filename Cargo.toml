@@ -1,0 +1,16 @@
+[package]
+name = "serif"
+description = "An opinionated tracing-subscriber configuration with a focus on readability"
+authors = ["Allen Wild <allenwild93@gmail.com>"]
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+chrono = { version = "0.4.2", default-features = false, features = ["clock"] }
+nu-ansi-term = "0.46"
+tracing-core = "0.1"
+tracing-subscriber = { version = "0.3.16", features = ["env-filter"] }
+
+# needed only for binary/example
+thiserror = "1"
+tracing = "0.1"
