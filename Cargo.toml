@@ -1,11 +1,16 @@
 [package]
 name = "serif"
+version = "0.1.0"
 description = "An opinionated tracing-subscriber configuration with a focus on readability"
 authors = ["Allen Wild <allenwild93@gmail.com>"]
-version = "0.1.0"
+license = "Apache-2.0"
+homepage = "https://github.com/aswild/serif"
+repository = "https://github.com/aswild/serif"
+readme = "README.md"
+keywords = ["logging", "tracing", "subscriber"]
+categories = ["development-tools::debugging"]
 edition = "2021"
-# Don't treate the examples directory as examples for this package (it's exclusively a workspace
-# member crate). Without this, "cargo test" at the workspace root breaks.
+# Don't treate the examples directory as examples for this package
 autoexamples = false
 
 [workspace]
@@ -21,14 +26,16 @@ atty = "0.2"
 chrono = { version = "0.4.20", default-features = false, features = ["clock"] }
 # same library that tracing-subscriber uses, and it's more ergonomic than termcolor in this case
 nu-ansi-term = "0.46"
-# just used for convenient re-exports
-tracing = { version = "0.1", optional = true, default-features = false }
+# just used for re-exports
+tracing = { version = "0.1", default-features = false, optional = true }
+# actually used by serif
 tracing-core = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]
 default = ["re-exports"]
-# re-export tracing as serif::tracing, and tracing's event macros as serif::tracing_macros::*
+
+# re-export tracing as serif::tracing, and tracing's event macros as serif::macros::*
 # This is a convenience so that consumers don't need to separately include tracing in their
 # Cargo.toml (unless additional tracing crate features are desired)
 re-exports = ["dep:tracing"]

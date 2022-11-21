@@ -1,6 +1,9 @@
 # Serif
 An opinionated Rust tracing-subscriber configuration with a focus on readability.
 
+[![Crates.io](https://img.shields.io/crates/v/serif)](https://crates.io/crates/serif)
+[![Docs.rs](https://docs.rs/serif/badge.svg)](https://docs.rs/serif)
+
 ![Screenshot of formatting](assets/yak-shave.png)
 
 ## About
