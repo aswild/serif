@@ -88,7 +88,7 @@ fn main() {
         // these options are the defaults, but are included here for completeness
         .with_output(serif::Output::Stdout)
         .with_color(serif::ColorMode::Auto)
-        .with_timestamp(serif::TimeFormat::Local)
+        .with_timestamp(serif::TimeFormat::local())
         .with_target(true)
         .with_scope(true)
         .init();

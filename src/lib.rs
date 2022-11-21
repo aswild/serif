@@ -60,6 +60,7 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
+use std::borrow::Cow;
 use std::fmt;
 
 use chrono::{DateTime, Local, Utc};
@@ -242,48 +243,111 @@ impl<'a> VisitFmt for FieldVisitor<'a> {
 }
 
 /// The style of timestamp to be formatted for tracing events.
-#[derive(Debug, Clone)]
-pub enum TimeFormat {
-    /// Don't display a timestamp.
+///
+/// Format strings are used by [`chrono::format::strftime`], and local timezone handling is
+/// provided by the [`chrono`] crate.
+#[derive(Clone)]
+pub struct TimeFormat {
+    inner: InnerTimeFormat,
+}
+
+/// Private implementation for TimeFormat
+#[derive(Clone)]
+enum InnerTimeFormat {
     None,
-    /// Display a RFC 3339 timestamp in the local timezone. This is the default.
-    Local,
-    /// Display a RFC 3339 timestamp in UTC.
-    Utc,
-    /// Display a timestamp in the local timezone using a custom format.
-    ///
-    /// See [`chrono::format::strftime`] for the syntax.
-    CustomLocal(String),
-    /// Display a timestamp in UTC using a custom format.
-    ///
-    /// See [`chrono::format::strftime`] for the syntax.
-    CustomUtc(String),
+    Local(Cow<'static, str>),
+    Utc(Cow<'static, str>),
 }
 
 impl Default for TimeFormat {
     fn default() -> Self {
-        Self::Local
+        Self::local()
+    }
+}
+
+impl fmt::Debug for TimeFormat {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.inner {
+            InnerTimeFormat::None => f.write_str("TimeFormat::None"),
+            InnerTimeFormat::Local(format) => write!(f, "TimeFormat::Local({format:?})"),
+            InnerTimeFormat::Utc(format) => write!(f, "TimeFormat::Utc({format:?})"),
+        }
     }
 }
 
 impl TimeFormat {
+    /// RFC 3339 timestamp enclosed in square brackets, with offset.
+    pub const LOCAL_FORMAT: &str = "[%Y-%m-%dT%H:%M:%S%z]";
+
+    /// RFC 3339 timestamp enclosed in square brackets, with UTC (using 'Z' for the timezone
+    /// instead of '+0000')
+    pub const UTC_FORMAT: &str = "[%Y-%m-%dT%H:%M:%SZ]";
+
+    /// Do not render a timestamp.
+    pub const fn none() -> Self {
+        Self { inner: InnerTimeFormat::None }
+    }
+
+    /// Render a timestamp in the local timezone using the default format.
+    pub const fn local() -> Self {
+        Self { inner: InnerTimeFormat::Local(Cow::Borrowed(Self::LOCAL_FORMAT)) }
+    }
+
+    /// Render a timestamp in UTC using the default format.
+    pub const fn utc() -> Self {
+        Self { inner: InnerTimeFormat::Utc(Cow::Borrowed(Self::UTC_FORMAT)) }
+    }
+
+    /// Render a timestamp in the local timezone using a custom format.
+    pub fn local_custom(format: impl Into<String>) -> Self {
+        Self { inner: InnerTimeFormat::Local(Cow::Owned(format.into())) }
+    }
+
+    /// Render a timestamp in UTC using a custom format.
+    pub fn utc_custom(format: impl Into<String>) -> Self {
+        Self { inner: InnerTimeFormat::Utc(Cow::Owned(format.into())) }
+    }
+
+    /// Render a timestamp in the local timezone using a static custom format.
+    pub const fn local_const(format: &'static str) -> Self {
+        Self { inner: InnerTimeFormat::Local(Cow::Borrowed(format)) }
+    }
+
+    /// Render a timestamp in the utc timezone using a static custom format.
+    pub const fn utc_const(format: &'static str) -> Self {
+        Self { inner: InnerTimeFormat::Utc(Cow::Borrowed(format)) }
+    }
+
+    /// Format a timestamp using the given DateTime.
+    ///
+    /// This method always takes a [`DateTime<Utc>`], which will be converted to the local timezone
+    /// if necessary.
+    pub fn format_timestamp(&self, datetime: &DateTime<Utc>) -> String {
+        TimeDisplay(self, datetime).to_string()
+    }
+
     fn is_none(&self) -> bool {
-        matches!(self, TimeFormat::None)
+        matches!(self.inner, InnerTimeFormat::None)
+    }
+
+    fn format_timestamp_impl(&self, dt: &DateTime<Utc>, f: &mut fmt::Formatter) -> fmt::Result {
+        match &self.inner {
+            InnerTimeFormat::None => Ok(()),
+            InnerTimeFormat::Local(format) => {
+                let local = DateTime::<Local>::from(*dt);
+                fmt::Display::fmt(&local.format(format), f)
+            }
+            InnerTimeFormat::Utc(format) => fmt::Display::fmt(&dt.format(format), f),
+        }
     }
 }
 
 /// Helper to format a timestamp easily using Display
-struct TimeDisplay<'a>(&'a TimeFormat, DateTime<Utc>);
+struct TimeDisplay<'a>(&'a TimeFormat, &'a DateTime<Utc>);
 
 impl fmt::Display for TimeDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self.0 {
-            TimeFormat::None => Ok(()),
-            TimeFormat::Local => DateTime::<Local>::from(self.1).format("%FT%T%z").fmt(f),
-            TimeFormat::Utc => self.1.format("%FT%TZ").fmt(f),
-            TimeFormat::CustomLocal(fmt) => DateTime::<Local>::from(self.1).format(fmt).fmt(f),
-            TimeFormat::CustomUtc(fmt) => self.1.format(fmt).fmt(f),
-        }
+        self.0.format_timestamp_impl(self.1, f)
     }
 }
 
@@ -339,11 +403,14 @@ where
         mut writer: Writer<'_>,
         event: &Event<'_>,
     ) -> fmt::Result {
-        let dimmed = Style::default().dimmed();
-
         // display the timestamp
         if !self.time_format.is_none() {
-            write_style!(writer, dimmed, "[{}] ", TimeDisplay(&self.time_format, Utc::now()))?;
+            write_style!(
+                writer,
+                Style::default().dimmed(),
+                "{} ",
+                TimeDisplay(&self.time_format, &Utc::now())
+            )?;
         }
 
         // display the level
