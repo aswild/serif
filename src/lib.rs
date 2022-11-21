@@ -139,6 +139,7 @@ macro_rules! write_style {
 /// either side of the `message` field, but not around other fields.
 ///
 /// [`SubscriberBuilder::fmt_fields`]: tracing_subscriber::fmt::SubscriberBuilder::fmt_fields
+#[derive(Clone)]
 pub struct FieldFormatter {
     // reserve the right to add options in the future
     _private: (),
@@ -154,6 +155,12 @@ impl FieldFormatter {
 impl Default for FieldFormatter {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl fmt::Debug for FieldFormatter {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.pad("FieldFormatter")
     }
 }
 
@@ -178,6 +185,7 @@ enum FieldType {
 /// If a field is named `message`, then it's printed in the default text style. All other fields
 /// are formatted in square brackets and dimmed text style like `[name=value]`. Padding is added on
 /// either side of the `message` field, but not around other fields.
+#[derive(Debug)]
 pub struct FieldVisitor<'a> {
     writer: Writer<'a>,
     result: fmt::Result,
@@ -285,6 +293,7 @@ impl fmt::Display for TimeDisplay<'_> {
 /// Events are rendered similarly to [`tracing_subscriber::fmt::format::Full`], but with everything
 /// besides the main log message in dimmed ANSI text colors to increase readability of the main log
 /// message.
+#[derive(Debug, Clone)]
 pub struct EventFormatter {
     time_format: TimeFormat,
     display_target: bool,

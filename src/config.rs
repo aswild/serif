@@ -16,7 +16,7 @@ use crate::{EventFormatter, FieldFormatter, TimeFormat};
 /// is generic over its Writer type.
 ///
 /// [`FmtSubscriber`]: tracing_subscriber::fmt::Subscriber
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum Output {
     /// Log to standard output. This is the default.
     Stdout,
@@ -32,7 +32,7 @@ impl Default for Output {
 }
 
 /// When to apply ANSI colors to output.
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub enum ColorMode {
     /// Apply colors if the output (stdout or stderr) is a terminal. This is the default.
     ///
@@ -71,6 +71,7 @@ impl ColorMode {
 }
 
 /// Builder style configuration for the `serif` tracing-subscriber implementation.
+#[derive(Debug, Clone)]
 pub struct Config {
     event_formatter: EventFormatter,
     output: Output,
