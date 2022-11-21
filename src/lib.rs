@@ -1,3 +1,65 @@
+// Copyright 2022 Allen Wild
+// SPDX-License-Identifier: Apache-2.0
+//! Serif is an opinionated Rust tracing-subscriber configuration with a focus on readability.
+//! ## About
+//!
+//! Serif is my take on the best way to configure [`tracing-subscriber`] for use in command-line
+//! applications, with an emphasis on readability of the main log messages. The tracing span scope,
+//! event target, and additional metadata is all rendered with dimmed colors, making the main
+//! message stand out quickly. Or at least it does on the Solarized Dark colorscheme that I prefer.
+//!
+//! Serif uses [`EnvFilter`] for filtering using the `RUST_LOG` environment variable, with a default
+//! level of `INFO` if not otherwise configured.
+//!
+//! Serif sets up [`FmtSubscriber`] and [`EnvFilter`] in a unified configuration. Basically this is
+//! all to make my life easier migrating from [`env_logger`].
+//!
+//! ## Usage
+//!
+//! All you need is a single dependency in `Cargo.toml` and a single builder chain to set up the
+//! global default tracing subscriber.  For convenience, `serif` re-exports `tracing` and provides
+//! the common log macros in `serif::macros`.
+//!
+//! ```
+//! use serif::macros::*;
+//! use serif::tracing::Level;
+//!
+//! # fn do_stuff() {}
+//! fn main() {
+//!     serif::Config::new()            // create config builder
+//!         .with_default(Level::DEBUG) // the default otherwise is INFO
+//!         .init();                    // finalize and register with tracing
+//!     info!("Hello World!");
+//!     do_stuff();
+//!     debug!("Finished doing stuff");
+//! }
+//! ```
+//!
+//! For more advanced use-cases, Serif provides [`EventFormatter`] which implements
+//! [`FormatEvent`], and [`FieldFormatter`] which implements [`FormatFields`]. These objects can be
+//! passed to a [`SubscriberBuilder`] along with whatever other options are desired.
+//!
+//! ## ANSI Terminal Colors
+//!
+//! By default, Serif enables ANSI coloring when the output file descriptor (stdout or stderr) is
+//! a TTY and the environment variable `NO_COLOR` is either unset or empty. At the moment, the
+//! specific color styles are not customizable.
+//!
+//! A note to advanced users configuring a [`SubscriberBuilder`] manually: `EventFormatter` and
+//! `FieldFormatter` do not track whether ANSI colors are enabled directly, instead they obtain
+//! this from the [`Writer`] that's passed to various methods. Call
+//! [`SubscriberBuilder::with_ansi`] to configure coloring in custom usage.
+//!
+//! [`tracing-subscriber`]: https://lib.rs/crates/tracing-subscriber
+//! [`FmtSubscriber`]: tracing_subscriber::fmt::Subscriber
+//! [`EnvFilter`]: tracing_subscriber::EnvFilter
+//! [`env_logger`]: https://lib.rs/crates/env_logger
+//! [`SubscriberBuilder`]: tracing_subscriber::fmt::SubscriberBuilder
+//! [`SubscriberBuilder::with_ansi`]: tracing_subscriber::fmt::SubscriberBuilder::with_ansi
+
+#![warn(missing_docs)]
+#![warn(clippy::all)]
+
 use std::fmt;
 
 use chrono::{DateTime, Local, Utc};
@@ -12,6 +74,8 @@ use tracing_subscriber::{
 #[cfg(feature = "re-exports")]
 pub use tracing;
 
+/// Convenient re-exports of macros from the [`tracing`] crate. This module is intended to be
+/// glob-imported like a prelude.
 #[cfg(feature = "re-exports")]
 pub mod macros {
     #[doc(no_inline)]
@@ -21,7 +85,7 @@ pub mod macros {
 mod config;
 pub use config::{ColorMode, Config, Output};
 
-/// Extension trait for writing ANSI-styled messages
+/// Extension trait for writing ANSI-styled messages.
 trait WriterExt: fmt::Write {
     /// Whether or not ANSI formatting should be enabled.
     ///
@@ -30,7 +94,7 @@ trait WriterExt: fmt::Write {
     fn enable_ansi(&self) -> bool;
 
     /// Write any `Display`-able type to this Writer, using the given `Style` if and only if
-    /// `enable_ansi` returns `true`
+    /// `enable_ansi` returns `true`.
     fn write_style<S, T>(&mut self, style: S, value: T) -> fmt::Result
     where
         S: Into<Style>,
@@ -52,16 +116,27 @@ impl WriterExt for Writer<'_> {
     }
 }
 
-/// Macro to call [`WriterExt::write_style`] with arbitrary format arguments
+/// Macro to call [`WriterExt::write_style`] with arbitrary format arguments.
 macro_rules! write_style {
     ($writer:expr, $style:expr, $($arg:tt)*) => {
         $writer.write_style($style, format_args!($($arg)*))
     };
 }
 
-/// `serif`'s formatter for event and span metadata fields.
+/// Serif's formatter for event and span metadata fields.
 ///
-/// `FieldFormatter` is intended to be used with [`SubscriberBuilder::fmt_fields`]
+/// `FieldFormatter` is intended to be used with [`SubscriberBuilder::fmt_fields`] and is designed
+/// to work with [`EventFormatter`]'s output format.
+///
+/// `FieldFormatter` implements [`FormatFields`], though this isn't immediately clear in Rustdoc.
+/// Specifically, `FieldFormatter` implements [`MakeVisitor`], and [`FieldVisitor`] implements
+/// [`Visit`], [`VisitOutput`], and [`VisitFmt`]. Thanks to blanket impls in the
+/// [`tracing_subscriber`] crate, this means that `FieldFormatter` implements [`FormatFields`].
+///
+/// # Field Format
+/// If a field is named `message`, then it's printed in the default text style. All other fields
+/// are formatted in square brackets and dimmed text style like `[name=value]`. Padding is added on
+/// either side of the `message` field, but not around other fields.
 ///
 /// [`SubscriberBuilder::fmt_fields`]: tracing_subscriber::fmt::SubscriberBuilder::fmt_fields
 pub struct FieldFormatter {
@@ -70,6 +145,7 @@ pub struct FieldFormatter {
 }
 
 impl FieldFormatter {
+    /// Create a new `FieldFormatter` with the default configuration.
     pub fn new() -> Self {
         Self { _private: () }
     }
@@ -89,7 +165,7 @@ impl<'a> MakeVisitor<Writer<'a>> for FieldFormatter {
     }
 }
 
-/// A type of field that's been visited. Implementation detail of [`FieldVisitor`]
+/// A type of field that's been visited. Implementation detail of [`FieldVisitor`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FieldType {
     None,
@@ -99,9 +175,9 @@ enum FieldType {
 
 /// The visitor type used by [`FieldFormatter`]
 ///
-/// If a field is named `"message"`, then it's printed in the default text style. All other fields
+/// If a field is named `message`, then it's printed in the default text style. All other fields
 /// are formatted in square brackets and dimmed text style like `[name=value]`. Padding is added on
-/// either side of the `"message"` field, but not around other fields.
+/// either side of the `message` field, but not around other fields.
 pub struct FieldVisitor<'a> {
     writer: Writer<'a>,
     result: fmt::Result,
@@ -132,7 +208,6 @@ impl<'a> FieldVisitor<'a> {
             write_style!(self.writer, Style::default().dimmed(), "{pad}[{name}={value:?}]")?;
             self.last = FieldType::Other;
         }
-
         Ok(())
     }
 }
@@ -158,22 +233,22 @@ impl<'a> VisitFmt for FieldVisitor<'a> {
     }
 }
 
-/// The style of timestamp to be formatted for tracing events
+/// The style of timestamp to be formatted for tracing events.
 #[derive(Debug, Clone)]
 pub enum TimeFormat {
-    /// Don't display a timestamp
+    /// Don't display a timestamp.
     None,
-    /// Display a RFC 3339 timestamp in the local timezone. This is the default
+    /// Display a RFC 3339 timestamp in the local timezone. This is the default.
     Local,
-    /// Display a RFC 3339 timestamp in UTC
+    /// Display a RFC 3339 timestamp in UTC.
     Utc,
     /// Display a timestamp in the local timezone using a custom format.
     ///
-    /// See [`chrono::format::strftime`] for the syntax
+    /// See [`chrono::format::strftime`] for the syntax.
     CustomLocal(String),
     /// Display a timestamp in UTC using a custom format.
     ///
-    /// See [`chrono::format::strftime`] for the syntax
+    /// See [`chrono::format::strftime`] for the syntax.
     CustomUtc(String),
 }
 
@@ -204,7 +279,12 @@ impl fmt::Display for TimeDisplay<'_> {
     }
 }
 
-/// `serif`'s main tracing event formatter.
+/// Serif's tracing event formatter.
+///
+/// # Event Format
+/// Events are rendered similarly to [`tracing_subscriber::fmt::format::Full`], but with everything
+/// besides the main log message in dimmed ANSI text colors to increase readability of the main log
+/// message.
 pub struct EventFormatter {
     time_format: TimeFormat,
     display_target: bool,
@@ -217,7 +297,7 @@ impl EventFormatter {
         Self { time_format: Default::default(), display_target: true, display_scope: true }
     }
 
-    /// Set the timestamp format for this event formatter
+    /// Set the timestamp format for this event formatter.
     pub fn with_timestamp(self, time_format: TimeFormat) -> Self {
         Self { time_format, ..self }
     }

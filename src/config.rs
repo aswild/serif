@@ -1,3 +1,8 @@
+// Copyright 2022 Allen Wild
+// SPDX-License-Identifier: Apache-2.0
+//! Implementation of `serif::Config`. This module is private, but its pub types are exported and
+//! inlined at the top-level of the `serif` crate.
+
 use std::env::{self, VarError};
 use std::io;
 
@@ -5,12 +10,17 @@ use tracing_subscriber::filter::{Directive, EnvFilter, LevelFilter};
 
 use crate::{EventFormatter, FieldFormatter, TimeFormat};
 
-/// The destination for where serif will write logs
+/// The destination for where serif will write logs.
+///
+/// Only stdout and stderr are supported, due to type system limitations and how [`FmtSubscriber`]
+/// is generic over its Writer type.
+///
+/// [`FmtSubscriber`]: tracing_subscriber::fmt::Subscriber
 #[derive(Clone, Copy)]
 pub enum Output {
-    /// Log to standard output
+    /// Log to standard output. This is the default.
     Stdout,
-    /// Log to standard error
+    /// Log to standard error.
     Stderr,
 }
 
@@ -21,29 +31,28 @@ impl Default for Output {
     }
 }
 
-/// When to apply ANSI colors to output
+/// When to apply ANSI colors to output.
 #[derive(Clone, Copy)]
 pub enum ColorMode {
-    /// Apply colors if the output (stdout or stderr) is a terminal.
+    /// Apply colors if the output (stdout or stderr) is a terminal. This is the default.
     ///
     /// Additionally, if the `NO_COLOR` environment variable is set to any non-empty string, ANSI
     /// coloring will be disabled.
     Auto,
-    /// Always apply ANSI colors
+    /// Always apply ANSI colors.
     Always,
-    /// Never apply ANSI colors
+    /// Never apply ANSI colors.
     Never,
 }
 
 impl Default for ColorMode {
-    /// The default color mode is `Auto`, i.e. apply ANSI styling if the output file is a TTY
     fn default() -> Self {
         Self::Auto
     }
 }
 
 impl ColorMode {
-    /// Whether to enable ANSI colors for a given Output destination
+    /// Whether to enable ANSI colors for a given Output destination.
     fn enable_for(&self, output: Output) -> bool {
         match self {
             Self::Auto => {
@@ -61,7 +70,7 @@ impl ColorMode {
     }
 }
 
-/// Builder style configuration for the `serif` tracing-subscriber implementation
+/// Builder style configuration for the `serif` tracing-subscriber implementation.
 pub struct Config {
     event_formatter: EventFormatter,
     output: Output,
@@ -78,7 +87,7 @@ impl Default for Config {
 impl Config {
     // main builder methods
 
-    /// Create a new `Config` with the default configuration
+    /// Create a new `Config` with the default configuration.
     pub fn new() -> Self {
         Self {
             event_formatter: Default::default(),
@@ -88,20 +97,20 @@ impl Config {
         }
     }
 
-    /// Change the output destination to stdout or stderr. The default is stderr.
+    /// Change the output destination to stdout or stderr. The default is stdout.
     pub fn with_output(self, output: Output) -> Self {
         Self { output, ..self }
     }
 
-    /// Enable or disable ANSI coloring. Default is [`ColorMode::Auto`]
+    /// Enable or disable ANSI coloring. The default is [`ColorMode::Auto`].
     pub fn with_color(self, color: ColorMode) -> Self {
         Self { color, ..self }
     }
 
-    /// Set the default log directive.
+    /// Set the default log directive. The default is the INFO level.
     ///
-    /// Usually this will be used with a [`LevelFilter`] to set a default log level, as
-    /// [`LevelFilter`] implements `Into<Directive>`.
+    /// You can call this with [`tracing::Level`] and [`tracing_subscriber::filter::LevelFilter`],
+    /// since those types implement `Into<Directive>`.
     pub fn with_default(self, default: impl Into<Directive>) -> Self {
         Self { default_directive: default.into(), ..self }
     }
@@ -154,7 +163,7 @@ impl Config {
     /// # Panics
     ///
     /// Panics if the `RUST_LOG` environment variable is invalid (see [`make_env_filter`]) or if
-    /// another global subscriber is installed (see [`SubscriberBuilder::init`])
+    /// another global subscriber is already installed (see [`SubscriberBuilder::init`]).
     ///
     /// [`make_env_filter`]: Config::make_env_filter
     /// [`SubscriberBuilder::init`]: tracing_subscriber::fmt::SubscriberBuilder::init
@@ -181,7 +190,7 @@ impl Config {
     /// # Panics
     ///
     /// Panics if the `RUST_LOG` environment variable contains invalid unicode, or if it contains
-    /// invalid EnvFilter directives.
+    /// invalid [`EnvFilter`] directives.
     pub fn make_env_filter(&self) -> EnvFilter {
         // EnvFilter's handling of defaults and fallbacks is wonky and confusing (there's a number
         // of github issues so hopefully it's improved eventually). So we sidestep all that mess
