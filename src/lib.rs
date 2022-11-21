@@ -185,7 +185,10 @@ enum FieldType {
 ///
 /// If a field is named `message`, then it's printed in the default text style. All other fields
 /// are formatted in square brackets and dimmed text style like `[name=value]`. Padding is added on
-/// either side of the `message` field, but not around other fields.
+/// either side of the `message` field, but not around other fields. [`Error`] typed fields are
+/// rendered in dimmed red text.
+///
+/// [`Error`]: std::error::Error
 #[derive(Debug)]
 pub struct FieldVisitor<'a> {
     writer: Writer<'a>,
@@ -199,25 +202,20 @@ impl<'a> FieldVisitor<'a> {
         Self { writer, result: Ok(()), last: FieldType::None }
     }
 
-    /// Implementation of `Visit::record_debug` but returning a Result for easier error handling.
-    fn inner_record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) -> fmt::Result {
-        let name = field.name();
-        if name == "message" {
-            let pad = match self.last {
-                FieldType::None => "",
-                FieldType::Message | FieldType::Other => " ",
-            };
-            write!(self.writer, "{pad}{value:?}")?;
-            self.last = FieldType::Message;
-        } else {
-            let pad = match self.last {
-                FieldType::Message => " ",
-                FieldType::None | FieldType::Other => "",
-            };
-            write_style!(self.writer, Style::default().dimmed(), "{pad}[{name}={value:?}]")?;
-            self.last = FieldType::Other;
+    /// Get the padding that should be prepended when visiting the message field
+    fn pad_for_message(&self) -> &'static str {
+        match self.last {
+            FieldType::None => "",
+            FieldType::Message | FieldType::Other => " ",
         }
-        Ok(())
+    }
+
+    /// Get the padding that should be prepended when visiting a non-message field
+    fn pad_for_other(&self) -> &'static str {
+        match self.last {
+            FieldType::Message => " ",
+            FieldType::None | FieldType::Other => "",
+        }
     }
 }
 
@@ -226,7 +224,41 @@ impl<'a> Visit for FieldVisitor<'a> {
         if self.result.is_err() {
             return;
         }
-        self.result = self.inner_record_debug(field, value);
+
+        let name = field.name();
+        self.result = if name == "message" {
+            let pad = self.pad_for_message();
+            self.last = FieldType::Message;
+            write!(self.writer, "{pad}{value:?}")
+        } else {
+            let pad = self.pad_for_other();
+            self.last = FieldType::Other;
+            write_style!(self.writer, Style::default().dimmed(), "{pad}[{name}={value:?}]")
+        }
+    }
+
+    fn record_str(&mut self, field: &Field, value: &str) {
+        if field.name() == "message" {
+            // Usually the message gets visited by record_debug, presumably becuase it's
+            // a fmt::Arguments object from a format_args! macro, but just in case the message
+            // field ends up here, force using the Display impl to render without quotes.
+            self.record_debug(field, &format_args!("{value}"));
+        } else {
+            // Otherwise, delegate to record_debug as usual.
+            self.record_debug(field, &value);
+        }
+    }
+
+    fn record_error(&mut self, field: &Field, value: &(dyn std::error::Error + 'static)) {
+        if self.result.is_err() {
+            return;
+        }
+
+        // Treat Errors like a non-message field, and make them red.
+        let name = field.name();
+        let pad = self.pad_for_other();
+        self.last = FieldType::Other;
+        self.result = write_style!(self.writer, Color::Red.dimmed(), "{pad}[{name}={value}]");
     }
 }
 
