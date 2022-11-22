@@ -30,6 +30,7 @@ nu-ansi-term = "0.46"
 tracing = { version = "0.1", default-features = false, optional = true }
 # actually used by serif
 tracing-core = "0.1"
+tracing-log = { version = "0.1", default-features = false }
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [features]

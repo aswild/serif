@@ -66,6 +66,7 @@ use std::fmt;
 use chrono::{DateTime, Local, Utc};
 use nu_ansi_term::{Color, Style};
 use tracing_core::{field::Field, Event, Level, Subscriber};
+use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
     field::{MakeVisitor, Visit, VisitFmt, VisitOutput},
     fmt::{format::Writer, FmtContext, FormatEvent, FormatFields, FormattedFields},
@@ -226,6 +227,11 @@ impl<'a> Visit for FieldVisitor<'a> {
         }
 
         let name = field.name();
+        if name.starts_with("log.") {
+            // skip log metadata
+            return;
+        }
+
         self.result = if name == "message" {
             let pad = self.pad_for_message();
             self.last = FieldType::Message;
@@ -254,8 +260,13 @@ impl<'a> Visit for FieldVisitor<'a> {
             return;
         }
 
-        // Treat Errors like a non-message field, and make them red.
         let name = field.name();
+        if name.starts_with("log.") {
+            // skip log metadata
+            return;
+        }
+
+        // Treat Errors like a non-message field, and make them red.
         let pad = self.pad_for_other();
         self.last = FieldType::Other;
         self.result = write_style!(self.writer, Color::Red.dimmed(), "{pad}[{name}={value}]");
@@ -435,6 +446,10 @@ where
         mut writer: Writer<'_>,
         event: &Event<'_>,
     ) -> fmt::Result {
+        // normalize event metadata in case this even was a log message
+        let norm_meta = event.normalized_metadata();
+        let meta = norm_meta.as_ref().unwrap_or_else(|| event.metadata());
+
         // display the timestamp
         if !self.time_format.is_none() {
             write_style!(
@@ -446,7 +461,7 @@ where
         }
 
         // display the level
-        let level = *event.metadata().level();
+        let level = *meta.level();
         let level_style = match level {
             Level::TRACE => Color::Purple,
             Level::DEBUG => Color::Blue,
@@ -479,7 +494,7 @@ where
 
         // display the target (which is the rust module path by default, but can be overridden)
         if self.display_target {
-            write_style!(writer, Color::Blue.dimmed(), "{}", event.metadata().target())?;
+            write_style!(writer, Color::Blue.dimmed(), "{}", meta.target())?;
             writer.write_str(": ")?;
         }
 
