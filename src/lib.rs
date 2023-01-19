@@ -81,7 +81,10 @@ pub use tracing;
 #[cfg(feature = "re-exports")]
 pub mod macros {
     #[doc(no_inline)]
-    pub use tracing::{debug, enabled, error, info, span, trace, warn};
+    pub use tracing::{
+        debug, debug_span, enabled, error, error_span, event, event_enabled, info, info_span, span,
+        span_enabled, trace, trace_span, warn, warn_span,
+    };
 }
 
 mod config;
