@@ -1,4 +1,4 @@
-// Copyright 2022 Allen Wild
+// Copyright 2022-2023 Allen Wild
 // SPDX-License-Identifier: Apache-2.0
 //! Serif is an opinionated Rust tracing-subscriber configuration with a focus on readability.
 //! ## About
