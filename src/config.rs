@@ -6,6 +6,7 @@
 use std::env::{self, VarError};
 use std::io;
 
+use is_terminal::IsTerminal;
 use tracing_subscriber::filter::{Directive, EnvFilter, LevelFilter};
 
 use crate::{EventFormatter, FieldFormatter, TimeFormat};
@@ -28,6 +29,19 @@ impl Default for Output {
     /// The default output destination is stdout
     fn default() -> Self {
         Self::Stdout
+    }
+}
+
+impl Output {
+    /// Is this output stream a terminal?
+    ///
+    /// This is effectively `impl IsTerminal for Output` but keeps [`IsTerminal`] out of serif's
+    /// public API.
+    fn is_terminal(&self) -> bool {
+        match self {
+            Output::Stdout => std::io::stdout().is_terminal(),
+            Output::Stderr => std::io::stderr().is_terminal(),
+        }
     }
 }
 
@@ -57,12 +71,10 @@ impl ColorMode {
         match self {
             Self::Auto => {
                 if env::var_os("NO_COLOR").map(|s| !s.is_empty()).unwrap_or(false) {
-                    return false;
+                    false
+                } else {
+                    output.is_terminal()
                 }
-                atty::is(match output {
-                    Output::Stdout => atty::Stream::Stdout,
-                    Output::Stderr => atty::Stream::Stderr,
-                })
             }
             Self::Always => true,
             Self::Never => false,

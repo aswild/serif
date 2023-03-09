@@ -20,10 +20,10 @@ autoexamples = false
 members = [".", "examples"]
 
 [dependencies]
-atty = "0.2"
 # chrono 0.4.20 is when soundness issues with localtime_r were fixed, and local timestamps are the
 # whole reason to use chrono rather than time.
 chrono = { version = "0.4.20", default-features = false, features = ["clock"] }
+is-terminal = "0.4"
 # same library that tracing-subscriber uses, and it's more ergonomic than termcolor in this case
 nu-ansi-term = "0.46"
 # just used for re-exports
