@@ -1,5 +1,12 @@
 # Serif Changelog
 
+## 0.1.3 (2023-03-09)
+
+- **changed**: Replace [`atty`] with [`is-terminal`] for terminal detection.
+
+[`atty`]: https://lib.rs/crates/atty
+[`is-terminal`]: https://lib.rs/crates/is-terminal
+
 ## 0.1.2 (2023-01-19)
 
 - **added**: Include more macros from tracing in `serif::macros`, namely `debug_span!` and friends
