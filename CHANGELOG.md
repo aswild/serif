@@ -1,5 +1,10 @@
 # Serif Changelog
 
+## 0.1.4 (2023-03-20)
+
+- Update dependency requirements for `tracing` crates. No functional changes, and no changes at all
+  for anyone who's run a normal `cargo update` command.
+
 ## 0.1.3 (2023-03-09)
 
 - **changed**: Replace [`atty`] with [`is-terminal`] for terminal detection.
