@@ -323,11 +323,11 @@ impl fmt::Debug for TimeFormat {
 
 impl TimeFormat {
     /// RFC 3339 timestamp enclosed in square brackets, with offset.
-    pub const LOCAL_FORMAT: &str = "[%Y-%m-%dT%H:%M:%S%z]";
+    pub const LOCAL_FORMAT: &'static str = "[%Y-%m-%dT%H:%M:%S%z]";
 
     /// RFC 3339 timestamp enclosed in square brackets, with UTC (using 'Z' for the timezone
     /// instead of '+0000')
-    pub const UTC_FORMAT: &str = "[%Y-%m-%dT%H:%M:%SZ]";
+    pub const UTC_FORMAT: &'static str = "[%Y-%m-%dT%H:%M:%SZ]";
 
     /// Do not render a timestamp.
     pub const fn none() -> Self {
