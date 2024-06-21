@@ -1,5 +1,9 @@
 # Serif Changelog
 
+## 0.1.5 (2024-06-21)
+
+- Update dependency `tracing-log` dependency to the latest version. No functional changes.
+
 ## 0.1.4 (2023-03-20)
 
 - Update dependency requirements for `tracing` crates. No functional changes, and no changes at all
