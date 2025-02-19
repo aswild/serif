@@ -345,13 +345,42 @@ impl TimeFormat {
     }
 
     /// Render a timestamp in the local timezone using a custom format.
+    ///
+    /// **Panics:** When `debug_assertions` are enabled, the format string is validated to ensure
+    /// that no unknown `%` fields are present. In release mode, formatting the timestamp fails and
+    /// tracing-subscriber will emit "Unable to format the following event" messages.
     pub fn local_custom(format: impl Into<String>) -> Self {
-        Self { inner: InnerTimeFormat::Local(Cow::Owned(format.into())) }
+        let format = format.into();
+
+        #[cfg(debug_assertions)]
+        {
+            let zoned = Zoned::new(Timestamp::UNIX_EPOCH, TimeZone::UTC);
+            let res = jiff::fmt::strtime::format(format.as_bytes(), &zoned);
+            if let Err(err) = res {
+                panic!("Unable to use custom TimeFormat '{format}': {err}");
+            }
+        }
+
+        Self { inner: InnerTimeFormat::Local(Cow::Owned(format)) }
     }
 
     /// Render a timestamp in UTC using a custom format.
+    ///
+    /// **Panics:** When `debug_assertions` are enabled, the format string is validated to ensure
+    /// that no unknown `%` fields are present. In release mode, formatting the timestamp fails and
+    /// tracing-subscriber will emit "Unable to format the following event" messages.
     pub fn utc_custom(format: impl Into<String>) -> Self {
-        Self { inner: InnerTimeFormat::Utc(Cow::Owned(format.into())) }
+        let format = format.into();
+
+        #[cfg(debug_assertions)]
+        {
+            let res = jiff::fmt::strtime::format(format.as_bytes(), Timestamp::UNIX_EPOCH);
+            if let Err(err) = res {
+                panic!("Unable to use custom TimeFormat '{format}': {err}");
+            }
+        }
+
+        Self { inner: InnerTimeFormat::Utc(Cow::Owned(format)) }
     }
 
     /// Render a timestamp in the local timezone using a static custom format.
