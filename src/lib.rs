@@ -1,4 +1,4 @@
-// Copyright 2022-2023 Allen Wild
+// Copyright 2022-2025 Allen Wild
 // SPDX-License-Identifier: Apache-2.0
 //! Serif is an opinionated Rust tracing-subscriber configuration with a focus on readability.
 //! ## About
@@ -63,7 +63,7 @@
 use std::borrow::Cow;
 use std::fmt;
 
-use chrono::{DateTime, Local, Utc};
+use jiff::{tz::TimeZone, Timestamp, Zoned};
 use nu_ansi_term::{Color, Style};
 use tracing_core::{field::Field, Event, Level, Subscriber};
 use tracing_log::NormalizeEvent;
@@ -364,36 +364,38 @@ impl TimeFormat {
         Self { inner: InnerTimeFormat::Utc(Cow::Borrowed(format)) }
     }
 
-    /// Format a timestamp using the given DateTime.
-    ///
-    /// This method always takes a [`DateTime<Utc>`], which will be converted to the local timezone
-    /// if necessary.
-    pub fn format_timestamp(&self, datetime: &DateTime<Utc>) -> String {
-        TimeDisplay(self, datetime).to_string()
+    /// Get a [`Display`]-able object of this format applied to a `Timestamp`.
+    pub fn render(&self, ts: Timestamp) -> impl fmt::Display + '_ {
+        TimeDisplay(self, ts)
+    }
+
+    /// Render the current system time in this format
+    pub fn render_now(&self) -> impl fmt::Display + '_ {
+        self.render(Timestamp::now())
     }
 
     fn is_none(&self) -> bool {
         matches!(self.inner, InnerTimeFormat::None)
     }
-
-    fn format_timestamp_impl(&self, dt: &DateTime<Utc>, f: &mut fmt::Formatter) -> fmt::Result {
-        match &self.inner {
-            InnerTimeFormat::None => Ok(()),
-            InnerTimeFormat::Local(format) => {
-                let local = DateTime::<Local>::from(*dt);
-                fmt::Display::fmt(&local.format(format), f)
-            }
-            InnerTimeFormat::Utc(format) => fmt::Display::fmt(&dt.format(format), f),
-        }
-    }
 }
 
 /// Helper to format a timestamp easily using Display
-struct TimeDisplay<'a>(&'a TimeFormat, &'a DateTime<Utc>);
+struct TimeDisplay<'a>(&'a TimeFormat, Timestamp);
 
 impl fmt::Display for TimeDisplay<'_> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        self.0.format_timestamp_impl(self.1, f)
+        match &self.0.inner {
+            InnerTimeFormat::None => Ok(()),
+            InnerTimeFormat::Local(format) => {
+                let zoned = Zoned::new(self.1, TimeZone::system());
+                let disp = zoned.strftime(format.as_bytes());
+                fmt::Display::fmt(&disp, f)
+            }
+            InnerTimeFormat::Utc(format) => {
+                let disp = self.1.strftime(format.as_bytes());
+                fmt::Display::fmt(&disp, f)
+            }
+        }
     }
 }
 
@@ -455,12 +457,7 @@ where
 
         // display the timestamp
         if !self.time_format.is_none() {
-            write_style!(
-                writer,
-                Style::default().dimmed(),
-                "{} ",
-                TimeDisplay(&self.time_format, &Utc::now())
-            )?;
+            write_style!(writer, Style::default().dimmed(), "{} ", self.time_format.render_now(),)?;
         }
 
         // display the level
