@@ -4,9 +4,8 @@
 //! inlined at the top-level of the `serif` crate.
 
 use std::env::{self, VarError};
-use std::io;
+use std::io::{self, IsTerminal};
 
-use is_terminal::IsTerminal;
 use tracing_subscriber::filter::{Directive, EnvFilter, LevelFilter};
 
 use crate::{EventFormatter, FieldFormatter, TimeFormat};
@@ -39,8 +38,8 @@ impl Output {
     /// public API.
     fn is_terminal(&self) -> bool {
         match self {
-            Output::Stdout => std::io::stdout().is_terminal(),
-            Output::Stderr => std::io::stderr().is_terminal(),
+            Output::Stdout => io::stdout().is_terminal(),
+            Output::Stderr => io::stderr().is_terminal(),
         }
     }
 }

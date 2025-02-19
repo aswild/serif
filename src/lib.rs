@@ -242,7 +242,7 @@ impl Visit for FieldVisitor<'_> {
             let pad = self.pad_for_other();
             self.last = FieldType::Other;
             write_style!(self.writer, Style::default().dimmed(), "{pad}[{name}={value:?}]")
-        }
+        };
     }
 
     fn record_str(&mut self, field: &Field, value: &str) {

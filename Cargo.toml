@@ -10,6 +10,7 @@ readme = "README.md"
 keywords = ["logging", "tracing", "subscriber"]
 categories = ["development-tools::debugging"]
 edition = "2021"
+rust-version = "1.70.0"
 # Don't treate the examples directory as examples for this package
 autoexamples = false
 
@@ -20,7 +21,6 @@ autoexamples = false
 members = [".", "examples"]
 
 [dependencies]
-is-terminal = "0.4"
 jiff = "0.2"
 # same library that tracing-subscriber uses, and it's more ergonomic than termcolor in this case
 nu-ansi-term = "0.46"
