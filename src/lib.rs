@@ -222,7 +222,7 @@ impl<'a> FieldVisitor<'a> {
     }
 }
 
-impl<'a> Visit for FieldVisitor<'a> {
+impl Visit for FieldVisitor<'_> {
     fn record_debug(&mut self, field: &Field, value: &dyn fmt::Debug) {
         if self.result.is_err() {
             return;
@@ -275,13 +275,13 @@ impl<'a> Visit for FieldVisitor<'a> {
     }
 }
 
-impl<'a> VisitOutput<fmt::Result> for FieldVisitor<'a> {
+impl VisitOutput<fmt::Result> for FieldVisitor<'_> {
     fn finish(self) -> fmt::Result {
         self.result
     }
 }
 
-impl<'a> VisitFmt for FieldVisitor<'a> {
+impl VisitFmt for FieldVisitor<'_> {
     fn writer(&mut self) -> &mut dyn fmt::Write {
         &mut self.writer
     }
