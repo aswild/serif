@@ -11,5 +11,5 @@ path = "yak_shave.rs"
 
 [dependencies]
 serif = { path = ".." }
-thiserror = "1"
+thiserror = "2"
 tracing = { version = "0.1", features = ["attributes"] }
