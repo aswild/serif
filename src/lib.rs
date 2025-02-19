@@ -60,7 +60,6 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-use std::borrow::Cow;
 use std::fmt;
 
 use jiff::{tz::TimeZone, Timestamp, Zoned};
@@ -301,8 +300,8 @@ pub struct TimeFormat {
 #[derive(Clone)]
 enum InnerTimeFormat {
     None,
-    Local(Cow<'static, str>),
-    Utc(Cow<'static, str>),
+    Local(Option<Box<str>>),
+    Utc(Option<Box<str>>),
 }
 
 impl Default for TimeFormat {
@@ -336,12 +335,12 @@ impl TimeFormat {
 
     /// Render a timestamp in the local timezone using the default format.
     pub const fn local() -> Self {
-        Self { inner: InnerTimeFormat::Local(Cow::Borrowed(Self::LOCAL_FORMAT)) }
+        Self { inner: InnerTimeFormat::Local(None) }
     }
 
     /// Render a timestamp in UTC using the default format.
     pub const fn utc() -> Self {
-        Self { inner: InnerTimeFormat::Utc(Cow::Borrowed(Self::UTC_FORMAT)) }
+        Self { inner: InnerTimeFormat::Utc(None) }
     }
 
     /// Render a timestamp in the local timezone using a custom format.
@@ -361,7 +360,7 @@ impl TimeFormat {
             }
         }
 
-        Self { inner: InnerTimeFormat::Local(Cow::Owned(format)) }
+        Self { inner: InnerTimeFormat::Local(Some(format.into_boxed_str())) }
     }
 
     /// Render a timestamp in UTC using a custom format.
@@ -380,17 +379,7 @@ impl TimeFormat {
             }
         }
 
-        Self { inner: InnerTimeFormat::Utc(Cow::Owned(format)) }
-    }
-
-    /// Render a timestamp in the local timezone using a static custom format.
-    pub const fn local_const(format: &'static str) -> Self {
-        Self { inner: InnerTimeFormat::Local(Cow::Borrowed(format)) }
-    }
-
-    /// Render a timestamp in the utc timezone using a static custom format.
-    pub const fn utc_const(format: &'static str) -> Self {
-        Self { inner: InnerTimeFormat::Utc(Cow::Borrowed(format)) }
+        Self { inner: InnerTimeFormat::Utc(Some(format.into_boxed_str())) }
     }
 
     /// Get a [`Display`]-able object of this format applied to a `Timestamp`.
@@ -416,11 +405,13 @@ impl fmt::Display for TimeDisplay<'_> {
         match &self.0.inner {
             InnerTimeFormat::None => Ok(()),
             InnerTimeFormat::Local(format) => {
+                let format = format.as_deref().unwrap_or(TimeFormat::LOCAL_FORMAT);
                 let zoned = Zoned::new(self.1, TimeZone::system());
                 let disp = zoned.strftime(format.as_bytes());
                 fmt::Display::fmt(&disp, f)
             }
             InnerTimeFormat::Utc(format) => {
+                let format = format.as_deref().unwrap_or(TimeFormat::UTC_FORMAT);
                 let disp = self.1.strftime(format.as_bytes());
                 fmt::Display::fmt(&disp, f)
             }
