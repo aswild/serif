@@ -1,4 +1,4 @@
-// Copyright 2022-2023 Allen Wild
+// Copyright 2022-2025 Allen Wild
 // SPDX-License-Identifier: Apache-2.0
 //! Implementation of `serif::Config`. This module is private, but its pub types are exported and
 //! inlined at the top-level of the `serif` crate.

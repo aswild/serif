@@ -1,5 +1,19 @@
 # Serif Changelog
 
+## 0.2.0 (2025-06-01)
+
+- **breaking**: Replace `chrono` with `jiff` in `serif::TimeFormat`. This changes the meaning of
+  the format strings useto be jiff's rather than chrono's.
+
+- **breaking**: Changed methods on `serif::TimeFormat`:
+  - Remove `local_const` and `utc_const`
+  - Replace `format_timestamp` with `render`
+  - Add a new `render_now` method to format the current timestamp
+  - `local_custom` and `utc_custom` constructors now may panic when debug assertions are enabled if
+    the format string is invalid.
+
+- The MSRV is Rust 1.70.0 to support `std::io::IsTerminal`
+
 ## 0.1.5 (2024-06-21)
 
 - Update dependency `tracing-log` dependency to the latest version. No functional changes.
