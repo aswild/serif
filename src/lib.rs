@@ -289,8 +289,8 @@ impl VisitFmt for FieldVisitor<'_> {
 
 /// The style of timestamp to be formatted for tracing events.
 ///
-/// Format strings are used by [`chrono::format::strftime`], and local timezone handling is
-/// provided by the [`chrono`] crate.
+/// Format strings are used by [`jiff::fmt::strtime`], and local timezone handling is
+/// provided by the [`jiff`] crate.
 #[derive(Clone)]
 pub struct TimeFormat {
     inner: InnerTimeFormat,
@@ -383,6 +383,8 @@ impl TimeFormat {
     }
 
     /// Get a [`Display`]-able object of this format applied to a `Timestamp`.
+    ///
+    /// [`Display`]: std::fmt::Display
     pub fn render(&self, ts: Timestamp) -> impl fmt::Display + '_ {
         TimeDisplay(self, ts)
     }
