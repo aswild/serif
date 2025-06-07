@@ -3,7 +3,7 @@
 ## 0.2.0 (2025-06-01)
 
 - **breaking**: Replace `chrono` with `jiff` in `serif::TimeFormat`. This changes the meaning of
-  the format strings useto be jiff's rather than chrono's.
+  the format strings to be jiff's rather than chrono's.
 
 - **breaking**: Changed methods on `serif::TimeFormat`:
   - Remove `local_const` and `utc_const`
