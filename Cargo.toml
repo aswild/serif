@@ -22,8 +22,8 @@ members = [".", "examples"]
 
 [dependencies]
 jiff = "0.2"
-# same library that tracing-subscriber uses, and it's more ergonomic than termcolor in this case
-nu-ansi-term = "0.46"
+# same library (and version) that tracing-subscriber uses
+nu-ansi-term = "0.50"
 # just used for re-exports
 tracing = { version = "0.1.37", default-features = false, optional = true }
 # actually used by serif
