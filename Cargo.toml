@@ -9,8 +9,8 @@ repository = "https://github.com/aswild/serif"
 readme = "README.md"
 keywords = ["logging", "tracing", "subscriber"]
 categories = ["development-tools::debugging"]
-edition = "2021"
-rust-version = "1.70.0"
+edition = "2024"
+rust-version = "1.85.0"
 # Don't treate the examples directory as examples for this package
 autoexamples = false
 

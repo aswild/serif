@@ -62,13 +62,13 @@
 
 use std::fmt;
 
-use jiff::{tz::TimeZone, Timestamp, Zoned};
+use jiff::{Timestamp, Zoned, tz::TimeZone};
 use nu_ansi_term::{Color, Style};
-use tracing_core::{field::Field, Event, Level, Subscriber};
+use tracing_core::{Event, Level, Subscriber, field::Field};
 use tracing_log::NormalizeEvent;
 use tracing_subscriber::{
     field::{MakeVisitor, Visit, VisitFmt, VisitOutput},
-    fmt::{format::Writer, FmtContext, FormatEvent, FormatFields, FormattedFields},
+    fmt::{FmtContext, FormatEvent, FormatFields, FormattedFields, format::Writer},
     registry::LookupSpan,
 };
 
