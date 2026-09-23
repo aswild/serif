@@ -45,23 +45,18 @@ impl Output {
 }
 
 /// When to apply ANSI colors to output.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub enum ColorMode {
     /// Apply colors if the output (stdout or stderr) is a terminal. This is the default.
     ///
     /// Additionally, if the `NO_COLOR` environment variable is set to any non-empty string, ANSI
     /// coloring will be disabled.
+    #[default]
     Auto,
     /// Always apply ANSI colors.
     Always,
     /// Never apply ANSI colors.
     Never,
-}
-
-impl Default for ColorMode {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 impl ColorMode {
