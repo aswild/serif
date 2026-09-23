@@ -1,4 +1,4 @@
-// Copyright 2022-2025 Allen Wild
+// Copyright 2022-2026 Allen Wild
 // SPDX-License-Identifier: Apache-2.0
 //! Implementation of `serif::Config`. This module is private, but its pub types are exported and
 //! inlined at the top-level of the `serif` crate.
@@ -81,19 +81,38 @@ impl ColorMode {
     }
 }
 
-/// Builder style configuration for the `serif` tracing-subscriber implementation.
+/// The default filtering behavior when `RUST_LOG` is not set in the environment.
 #[derive(Debug, Clone)]
+enum DefaultFilter {
+    /// A single Directive, e.g. `LevelFilter::INFO.into()`
+    Directive(Directive),
+    /// A custom (likely application-developer-supplied) string which is parsed the same as RUST_LOG
+    Env(String),
+}
+
+impl Default for DefaultFilter {
+    fn default() -> Self {
+        Self::Directive(LevelFilter::INFO.into())
+    }
+}
+
+impl DefaultFilter {
+    fn to_env_filter(&self) -> EnvFilter {
+        match self {
+            DefaultFilter::Directive(d) => EnvFilter::default().add_directive(d.clone()),
+            DefaultFilter::Env(s) => EnvFilter::try_new(s)
+                .unwrap_or_else(|err| panic!("Invalid RUST_LOG filter string '{s}': {err}")),
+        }
+    }
+}
+
+/// Builder style configuration for the `serif` tracing-subscriber implementation.
+#[derive(Debug, Clone, Default)]
 pub struct Config {
     event_formatter: EventFormatter,
     output: Output,
     color: ColorMode,
-    default_directive: Directive,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self::new()
-    }
+    default_filter: DefaultFilter,
 }
 
 impl Config {
@@ -101,12 +120,7 @@ impl Config {
 
     /// Create a new `Config` with the default configuration.
     pub fn new() -> Self {
-        Self {
-            event_formatter: Default::default(),
-            output: Default::default(),
-            color: Default::default(),
-            default_directive: LevelFilter::INFO.into(),
-        }
+        Self::default()
     }
 
     /// Change the output destination to stdout or stderr. The default is stdout.
@@ -119,12 +133,29 @@ impl Config {
         Self { color, ..self }
     }
 
+    /// Set the default log filter, as a string.
+    ///
+    /// This effectively sets the default value of `RUST_LOG`.
+    ///
+    /// This method overrides any previous call to [`with_default`] or [`with_verbosity`].
+    ///
+    /// [`with_default`]: Config::with_default
+    /// [`with_verbosity`]: Config::with_verbosity
+    pub fn with_default_env(self, s: impl Into<String>) -> Self {
+        Self { default_filter: DefaultFilter::Env(s.into()), ..self }
+    }
+
     /// Set the default log directive. The default is the INFO level.
     ///
     /// You can call this with [`tracing::Level`] and [`tracing_subscriber::filter::LevelFilter`],
     /// since those types implement `Into<Directive>`.
+    ///
+    /// This overrides any previous calls to [`with_default_env`] or [`with_verbosity`].
+    ///
+    /// [`with_default_env`]: Config::with_default_env
+    /// [`with_verbosity`]: Config::with_verbosity
     pub fn with_default(self, default: impl Into<Directive>) -> Self {
-        Self { default_directive: default.into(), ..self }
+        Self { default_filter: DefaultFilter::Directive(default.into()), ..self }
     }
 
     /// Set the default log level using a numberic "verbosity" value.
@@ -140,6 +171,11 @@ impl Config {
     ///   * `0`: info
     ///   * `1`: debug
     ///   * `2` or greater: trace
+    ///
+    /// This overrides any previous calls to [`with_default_env`] or [`with_default`].
+    ///
+    /// [`with_default`]: Config::with_default
+    /// [`with_default_env`]: Config::with_default_env
     pub fn with_verbosity(self, verbosity: i32) -> Self {
         let level = match verbosity.clamp(-3, 2) {
             -3 => LevelFilter::OFF,
@@ -225,7 +261,7 @@ impl Config {
                     panic!("Invalid RUST_LOG filter string '{filter_str}': {err}")
                 })
             }
-            None => EnvFilter::default().add_directive(self.default_directive.clone()),
+            None => self.default_filter.to_env_filter(),
         }
     }
 }
