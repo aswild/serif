@@ -137,9 +137,9 @@ impl Config {
     ///
     /// This effectively sets the default value of `RUST_LOG`.
     ///
-    /// This method overrides any previous call to [`with_default`] or [`with_verbosity`].
+    /// This method overrides any previous call to [`with_default_directive`] or [`with_verbosity`].
     ///
-    /// [`with_default`]: Config::with_default
+    /// [`with_default_directive`]: Config::with_default_directive
     /// [`with_verbosity`]: Config::with_verbosity
     pub fn with_default_env(self, s: impl Into<String>) -> Self {
         Self { default_filter: DefaultFilter::Env(s.into()), ..self }
@@ -154,15 +154,21 @@ impl Config {
     ///
     /// [`with_default_env`]: Config::with_default_env
     /// [`with_verbosity`]: Config::with_verbosity
-    pub fn with_default(self, default: impl Into<Directive>) -> Self {
+    pub fn with_default_directive(self, default: impl Into<Directive>) -> Self {
         Self { default_filter: DefaultFilter::Directive(default.into()), ..self }
+    }
+
+    #[doc(hidden)]
+    #[deprecated = "use Config::with_default_directive() instead"]
+    pub fn with_default(self, default: impl Into<Directive>) -> Self {
+        self.with_default_directive(default)
     }
 
     /// Set the default log level using a numberic "verbosity" value.
     ///
     /// Applications can use this to easily turn the count of command line flags (e.g. `--verbose`
     /// or `--quiet`) into a default log level. This method does the same thing as
-    /// [`Config::with_default`] and it makes no sense to combine them.
+    /// [`Config::with_default_directive`] and it makes no sense to combine them.
     ///
     /// The mapping of verbosity levels to log levels is:
     ///   * `-3` or less: off (no logs enabled)
@@ -172,9 +178,9 @@ impl Config {
     ///   * `1`: debug
     ///   * `2` or greater: trace
     ///
-    /// This overrides any previous calls to [`with_default_env`] or [`with_default`].
+    /// This overrides any previous calls to [`with_default_env`] or [`with_default_directive`].
     ///
-    /// [`with_default`]: Config::with_default
+    /// [`with_default_directive`]: Config::with_default_directive
     /// [`with_default_env`]: Config::with_default_env
     pub fn with_verbosity(self, verbosity: i32) -> Self {
         let level = match verbosity.clamp(-3, 2) {
@@ -186,7 +192,7 @@ impl Config {
             2 => LevelFilter::TRACE,
             _ => unreachable!(),
         };
-        self.with_default(level)
+        self.with_default_directive(level)
     }
 
     // EventFormatter builder methods

@@ -84,7 +84,7 @@ mod shaving {
 fn main() {
     serif::Config::new()
         // set trace level by default to show all the features
-        .with_default(tracing::Level::TRACE)
+        .with_default_directive(tracing::Level::TRACE)
         // these options are the defaults, but are included here for completeness
         .with_output(serif::Output::Stdout)
         .with_color(serif::ColorMode::Auto)
